@@ -7,9 +7,10 @@ const historyList = document.getElementById('history-list');
 const sessionPill = document.getElementById('session-pill');
 const sessionTitle = document.getElementById('session-title');
 
-const ENDPOINT = 'http://localhost:8081/ai/new/session';
+const ENDPOINT = 'http://localhost:8086/v2/chat';
 const LIST_ENDPOINT = 'http://localhost:8086/v2/session/list';
 const HISTORY_ENDPOINT = 'http://localhost:8086/v2/session/history';
+const NEW_SESSION_ENDPOINT = 'http://localhost:8086/v2/session/new';
 
 let conversations = [];
 let activeConversationId = null;
@@ -188,33 +189,45 @@ function refreshConversationTitle(conversation) {
   }
 }
 
-function createConversation(silent = false) {
+async function createConversation(silent = false) {
   const conversation = {
     id: `conv-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`,
     title: `新对话 ${++conversationCount}`,
     sessionId: null,
     messages: [],
   };
+
+  if (!silent) setStatus('正在创建新会话...');
+
+  try {
+    const response = await fetch(NEW_SESSION_ENDPOINT, { method: 'POST' });
+    if (response.ok) {
+      const data = await response.json();
+      conversation.sessionId = data.session_id;
+    }
+  } catch (error) {
+    console.error('创建会话失败:', error);
+  }
+
   conversations.unshift(conversation);
   activeConversationId = conversation.id;
   renderHistory();
   renderMessages(conversation);
   updateSessionMeta(conversation);
   if (!silent) setStatus('已创建新聊天');
-  // Clear input when creating new session
   questionInput.value = '';
   return conversation;
 }
 
-function ensureConversation() {
-  return getActiveConversation() || createConversation(true);
+async function ensureConversation() {
+  return getActiveConversation() || await createConversation(true);
 }
 
 async function sendMessage() {
   const question = questionInput.value.trim();
   if (!question || submitBtn.disabled) return;
 
-  const conversation = ensureConversation();
+  const conversation = await ensureConversation();
   submitBtn.disabled = true;
   questionInput.value = '';
   addMessage(conversation, 'user', question);
@@ -273,8 +286,8 @@ function handleKeydown(event) {
 // Initial load
 fetchHistoryList();
 
-newSessionBtn.addEventListener('click', () => {
-  createConversation();
+newSessionBtn.addEventListener('click', async () => {
+  await createConversation();
   setStatus('等待提交');
 });
 
